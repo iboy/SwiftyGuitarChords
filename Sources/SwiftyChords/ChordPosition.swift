@@ -14,6 +14,8 @@ import AppKit
 import UIKit
 #endif
 
+
+// MARK: - ChordPosition
 public struct ChordPosition: Codable, Identifiable, Equatable {
 
     public init(id: UUID = UUID(), frets: [Int], fingers: [Int], baseFret: Int, barres: [Int], capo: Bool? = nil, midi: [Int], key: Chords.Key, suffix: Chords.Suffix) {
@@ -54,8 +56,27 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
     ///   - forPrint: If set to `true` the diagram will be colored Black, not matter the users device settings. If set to false, the color of the diagram will match the system label color. Dark text for light mode, and Light text for dark mode. Default `false`.
     ///   - mirror: For lefthanded users. This will flip the chord along its y axis. Default `false`.
     /// - Returns: A CAShapeLayer that can be added as a sublayer to a view, or rendered to an image.
-    public func chordLayer(rect: CGRect, showFingers: Bool = true, chordName: Chords.Name = Chords.Name(), forPrint: Bool = false, mirror: Bool = false) -> CAShapeLayer {
-        return privateLayer(rect: rect, showFingers: showFingers, chordName: chordName, forScreen: !forPrint, mirror: mirror)
+    public func chordLayer(
+        rect: CGRect,
+        showFingers: Bool = true,
+        chordName: Chords.Name = Chords.Name(),
+        forPrint: Bool = false,
+        mirror: Bool = false,
+        showNut: Bool = true,
+        displayMode: ChordDisplayMode = .fingers,     // 🆕 NEW: What to show on dots
+        tuningOverride: GuitarTuning? = nil           // 🆕 NEW: Runtime tuning override
+    ) -> CAShapeLayer {
+        return privateLayer(
+            rect: rect,
+            showFingers: showFingers,
+            chordName: chordName,
+            forScreen: !forPrint,
+            mirror: mirror,
+            showNut: showNut,
+            displayMode: displayMode,                 // 🆕 Pass through
+            tuningOverride: tuningOverride            // 🆕 Pass through
+            
+        )
     }
 
     /// Now deprecated. Please see the chordLayer() function.
@@ -84,7 +105,20 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
         return privateLayer(rect: rect, showFingers: showFingers, chordName: Chords.Name(show: showChordName, key: .raw, suffix: .raw), forScreen: forScreen, mirror: mirror)
     }
 
-    private func privateLayer(rect: CGRect, showFingers: Bool, chordName: Chords.Name, forScreen: Bool, mirror: Bool = false) -> CAShapeLayer {
+    // Update the privateLayer method signature and pass parameters to dotsLayer:
+
+    private func privateLayer(
+        rect: CGRect,
+        showFingers: Bool,
+        chordName: Chords.Name,
+        forScreen: Bool,
+        mirror: Bool = false,
+        showNut: Bool = true,
+        displayMode: ChordDisplayMode = .fingers,     // 🆕 NEW
+        tuningOverride: GuitarTuning? = nil           // 🆕 NEW
+    ) -> CAShapeLayer {
+        // Determine which tuning to use
+        let effectiveTuning = tuningOverride ?? .standard
         let heightMultiplier: CGFloat = chordName.show ? 1.3 : 1.2
         let horScale = rect.height / heightMultiplier
         let scale = min(horScale, rect.width)
@@ -95,26 +129,71 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
         let fretMargin = size.height / 10
 
         let fretLength = size.width - (stringMargin * 2)
-        let stringLength = size.height - (fretMargin * (chordName.show ? 2.8 : 2))
-        let origin = CGPoint(x: rect.origin.x, y: chordName.show ? fretMargin * 1.2 : 0)
+        let stringLength =
+            size.height - (fretMargin * (chordName.show ? 2.8 : 2))
+        let origin = CGPoint(
+            x: rect.origin.x,
+            y: chordName.show ? fretMargin * 1.2 : 0
+        )
 
         let fretSpacing = stringLength / CGFloat(ChordPosition.numberOfFrets)
         let stringSpacing = fretLength / CGFloat(ChordPosition.numberOfStrings)
 
-        let fretConfig = LineConfig(spacing: fretSpacing, margin: fretMargin, length: fretLength, count: ChordPosition.numberOfFrets)
-        let stringConfig = LineConfig(spacing: stringSpacing, margin: stringMargin, length: stringLength, count: ChordPosition.numberOfStrings)
+        let fretConfig = LineConfig(
+            spacing: fretSpacing,
+            margin: fretMargin,
+            length: fretLength,
+            count: ChordPosition.numberOfFrets
+        )
+        let stringConfig = LineConfig(
+            spacing: stringSpacing,
+            margin: stringMargin,
+            length: stringLength,
+            count: ChordPosition.numberOfStrings
+        )
 
+        
+        
+        
         let layer = CAShapeLayer()
-        let stringsAndFrets = stringsAndFretsLayer(fretConfig: fretConfig, stringConfig: stringConfig, origin: origin, forScreen: forScreen)
-        let barre = barreLayer(fretConfig: fretConfig, stringConfig: stringConfig, origin: origin, showFingers: showFingers, forScreen: forScreen)
-        let dots = dotsLayer(stringConfig: stringConfig, fretConfig: fretConfig, origin: origin, showFingers: showFingers, forScreen: forScreen, rect: rect, mirror: mirror)
+        let stringsAndFrets = stringsAndFretsLayer(
+            fretConfig: fretConfig,
+            stringConfig: stringConfig,
+            origin: origin,
+            forScreen: forScreen,
+            showNut: showNut
+        )
+        let barre = barreLayer(
+            fretConfig: fretConfig,
+            stringConfig: stringConfig,
+            origin: origin,
+            showFingers: showFingers,
+            forScreen: forScreen
+        )
+        let dots = dotsLayer(
+            stringConfig: stringConfig,
+            fretConfig: fretConfig,
+            origin: origin,
+            showFingers: showFingers,
+            forScreen: forScreen,
+            rect: rect,
+            mirror: mirror,
+            displayMode: displayMode,        // 🆕 NEW
+            tuning: effectiveTuning          // 🆕 NEW
+        )
 
         layer.addSublayer(stringsAndFrets)
         layer.addSublayer(barre)
         layer.addSublayer(dots)
 
         if chordName.show {
-            let shapeLayer = nameLayer(fretConfig: fretConfig, origin: origin, center: size.width / 2 + origin.x, forScreen: forScreen, name: chordName)
+            let shapeLayer = nameLayer(
+                fretConfig: fretConfig,
+                origin: origin,
+                center: size.width / 2 + origin.x,
+                forScreen: forScreen,
+                name: chordName
+            )
             layer.addSublayer(shapeLayer)
         }
 
@@ -123,18 +202,32 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
         return layer
     }
 
-    private func stringsAndFretsLayer(fretConfig: LineConfig, stringConfig: LineConfig, origin: CGPoint, forScreen: Bool) -> CAShapeLayer {
+    private func stringsAndFretsLayer(
+        fretConfig: LineConfig,
+        stringConfig: LineConfig,
+        origin: CGPoint,
+        forScreen: Bool,
+        showNut: Bool = true
+    ) -> CAShapeLayer {
         let layer = CAShapeLayer()
 
-        let primaryColor = forScreen ? primaryColor.cgColor : SWIFTColor.black.cgColor
+        let primaryColor =
+            forScreen ? primaryColor.cgColor : SWIFTColor.black.cgColor
 
         // Strings
         let stringPath = CGMutablePath()
 
         for string in 0...stringConfig.count {
-            let x = stringConfig.spacing * CGFloat(string) + stringConfig.margin + origin.x
+            let x =
+                stringConfig.spacing * CGFloat(string) + stringConfig.margin
+                + origin.x
             stringPath.move(to: CGPoint(x: x, y: fretConfig.margin + origin.y))
-            stringPath.addLine(to: CGPoint(x: x, y: stringConfig.length + fretConfig.margin + origin.y))
+            stringPath.addLine(
+                to: CGPoint(
+                    x: x,
+                    y: stringConfig.length + fretConfig.margin + origin.y
+                )
+            )
         }
 
         let stringLayer = CAShapeLayer()
@@ -150,26 +243,41 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
             let fretPath = CGMutablePath()
             let lineWidth: CGFloat
 
-            if baseFret == 1 && fret == 0 {
-                lineWidth = fretConfig.spacing / 5
+            // 🎯 NUT CONTROL LOGIC: Only show thick nut line when showNut is true AND at position 1
+            if baseFret == 1 && fret == 0 && showNut {
+                lineWidth = fretConfig.spacing / 5  // Thick nut line
             } else {
-                lineWidth = fretConfig.spacing / 24
+                lineWidth = fretConfig.spacing / 24  // Regular fret line
             }
 
             // Draw fret number
             if baseFret != 1 {
                 let txtLayer = CAShapeLayer()
-                let txtFont = SWIFTFont.systemFont(ofSize: fretConfig.margin * 0.5)
-                let txtRect = CGRect(x: 0, y: 0, width: stringConfig.margin, height: fretConfig.spacing)
+                let txtFont = SWIFTFont.systemFont(
+                    ofSize: fretConfig.margin * 0.5
+                )
+                let txtRect = CGRect(
+                    x: 0,
+                    y: 0,
+                    width: stringConfig.margin,
+                    height: fretConfig.spacing
+                )
                 let transX = stringConfig.margin / 5 + origin.x
-                let transY = origin.y + (fretConfig.spacing / 2) + fretConfig.margin
-                let txtPath = "\(baseFret)".path(font: txtFont, rect: txtRect, position: CGPoint(x: transX, y: transY))
+                let transY =
+                    origin.y + (fretConfig.spacing / 2) + fretConfig.margin
+                let txtPath = "\(baseFret)".path(
+                    font: txtFont,
+                    rect: txtRect,
+                    position: CGPoint(x: transX, y: transY)
+                )
                 txtLayer.path = txtPath
                 txtLayer.fillColor = primaryColor
                 fretLayer.addSublayer(txtLayer)
             }
 
-            let y = fretConfig.spacing * CGFloat(fret) + fretConfig.margin + origin.y
+            let y =
+                fretConfig.spacing * CGFloat(fret) + fretConfig.margin
+                + origin.y
             let x = origin.x + stringConfig.margin
             fretPath.move(to: CGPoint(x: x, y: y))
             fretPath.addLine(to: CGPoint(x: fretConfig.length + x, y: y))
@@ -285,12 +393,23 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
         return layer
     }
 
-    private func dotsLayer(stringConfig: LineConfig, fretConfig: LineConfig, origin: CGPoint, showFingers: Bool, forScreen: Bool, rect: CGRect, mirror: Bool) -> CAShapeLayer {
+    private func dotsLayer(
+        stringConfig: LineConfig,
+        fretConfig: LineConfig,
+        origin: CGPoint,
+        showFingers: Bool,
+        forScreen: Bool,
+        rect: CGRect,
+        mirror: Bool,
+        displayMode: ChordDisplayMode = .fingers,     // 🆕 NEW
+        tuning: GuitarTuning = .standard              // 🆕 NEW
+    ) -> CAShapeLayer {
+        
         let layer = CAShapeLayer()
 
         let primaryColor = forScreen ? primaryColor.cgColor : SWIFTColor.black.cgColor
         let backgroundColor = forScreen ? backgroundColor.cgColor : SWIFTColor.white.cgColor
-
+        
         for index in 0..<frets.count {
             let fret = frets[index]
 
@@ -372,11 +491,31 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
 
             layer.addSublayer(dotLayer)
 
+            // 🔧 NEW: Use display text based on mode
             if showFingers {
-                let txtFont = SWIFTFont.systemFont(ofSize: stringConfig.margin, weight: .medium)
+                let txtFont = SWIFTFont.systemFont(
+                    ofSize: stringConfig.margin,
+                    weight: .medium
+                )
+                let txtRect = CGRect(
+                    x: 0,
+                    y: 0,
+                    width: stringConfig.spacing,
+                    height: fretConfig.spacing
+                )
 
-                let txtRect = CGRect(x: 0, y: 0, width: stringConfig.spacing, height: fretConfig.spacing)
-                let txtPath = "\(fingers[index])".path(font: txtFont, rect: txtRect, position: CGPoint(x: dotX, y: dotY))
+                // Use the calculated display text
+                let displayTexts = getDisplayText(mode: displayMode, tuning: tuning)
+
+                print("🎵 Display mode: \(displayMode), Texts: \(displayTexts)")
+                let displayText = displayTexts[index] ?? "\(fingers[index])"
+
+
+                let txtPath = displayText.path(
+                    font: txtFont,
+                    rect: txtRect,
+                    position: CGPoint(x: dotX, y: dotY)
+                )
                 let txtLayer = CAShapeLayer()
                 txtLayer.path = txtPath
                 txtLayer.fillColor = backgroundColor
@@ -390,6 +529,250 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
 
 }
 
+
+// MARK: - Guitar Tuning System
+
+public struct GuitarTuning {
+    public let name: String
+    public let noteNames: [String]  // ["E", "A", "D", "G", "B", "E"]
+    
+    public init(name: String, noteNames: [String]) {
+        self.name = name
+        self.noteNames = noteNames
+    }
+    
+    // Add the missing static methods
+        static func noteNameToMIDI(_ noteName: String, octave: Int) -> Int {
+            let noteValues: [String: Int] = [
+                "C": 0, "C♯": 1, "D♭": 1, "D": 2, "D♯": 3, "E♭": 3,
+                "E": 4, "F": 5, "F♯": 6, "G♭": 6, "G": 7, "G♯": 8,
+                "A♭": 8, "A": 9, "A♯": 10, "B♭": 10, "B": 11
+            ]
+            let baseNote = noteValues[noteName] ?? 0
+            return (octave + 1) * 12 + baseNote
+        }
+        
+        static func defaultOctaveForString(_ stringIndex: Int) -> Int {
+            let octaves = [2, 2, 3, 3, 3, 4]  // E2, A2, D3, G3, B3, E4
+            return octaves[min(stringIndex, octaves.count - 1)]
+        }
+        
+    
+        // Convert note names to MIDI for calculations
+        public var midiNotes: [Int] {
+            return noteNames.enumerated().map { index, noteName in
+            Self.noteNameToMIDI(noteName, octave: Self.defaultOctaveForString(index))
+        }
+    }
+    
+    
+    
+    // MARK: - Preset Tunings (Fender Tune Compatible)
+    
+    // Standard and Basic Variations
+    public static let standard = GuitarTuning(name: "Standard", noteNames: ["E", "A", "D", "G", "B", "E"])
+    public static let halfStepDown = GuitarTuning(name: "Half step down", noteNames: ["E♭", "A♭", "D♭", "G♭", "B♭", "E♭"])
+    public static let halfStepUp = GuitarTuning(name: "Half step up", noteNames: ["F", "A♯", "D♯", "G♯", "C", "F"])
+    public static let fullStepDown = GuitarTuning(name: "Full step down", noteNames: ["D", "G", "C", "F", "A", "D"])
+    
+    // Drop Tunings
+    public static let dropD = GuitarTuning(name: "Drop D", noteNames: ["D", "A", "D", "G", "B", "E"])
+    public static let dropC = GuitarTuning(name: "Drop C", noteNames: ["C", "G", "C", "F", "A", "D"])
+    public static let dropCSharp = GuitarTuning(name: "Drop C♯", noteNames: ["C♯", "G♯", "C♯", "F♯", "A♯", "D♯"])
+    public static let dropCSharpAlt = GuitarTuning(name: "Drop C♯ (Alt)", noteNames: ["C♯", "A", "D", "G", "B", "E"])
+    public static let dropB = GuitarTuning(name: "Drop B", noteNames: ["B", "G♭", "B", "E", "A♭", "D♭"])
+    public static let dropA = GuitarTuning(name: "Drop A", noteNames: ["A", "E", "A", "D", "G♭", "B"])
+    
+    // Open Tunings
+    public static let openG = GuitarTuning(name: "Open G", noteNames: ["D", "G", "D", "G", "B", "D"])
+    public static let openF = GuitarTuning(name: "Open F", noteNames: ["F", "A", "C", "F", "C", "F"])
+    public static let openE = GuitarTuning(name: "Open E", noteNames: ["E", "B", "E", "G♯", "B", "E"])
+    public static let openD = GuitarTuning(name: "Open D", noteNames: ["D", "A", "D", "F♯", "A", "D"])
+    public static let openC = GuitarTuning(name: "Open C", noteNames: ["C", "G", "C", "G", "C", "E"])
+    public static let openA = GuitarTuning(name: "Open A", noteNames: ["E", "A", "E", "A", "C♯", "E"])
+    
+    // Special Tunings
+    public static let dadgad = GuitarTuning(name: "DADGAD", noteNames: ["D", "A", "D", "G", "A", "D"])
+    
+    // Convenience array for picker/menu usage
+    public static let allPresets: [GuitarTuning] = [
+        .standard,
+        .halfStepDown,
+        .halfStepUp,
+        .fullStepDown,
+        .dropD,
+        .dropC,
+        .dropCSharp,
+        .dropCSharpAlt,
+        .dropB,
+        .dropA,
+        .openG,
+        .openF,
+        .openE,
+        .openD,
+        .openC,
+        .openA,
+        .dadgad
+    ]
+
+}
+
+extension GuitarTuning: Equatable, Hashable {
+    public static func == (lhs: GuitarTuning, rhs: GuitarTuning) -> Bool {
+        return lhs.name == rhs.name && lhs.noteNames == rhs.noteNames
+    }
+    
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+        hasher.combine(noteNames)
+    }
+}
+
+public extension ChordPosition {
+    
+    /// Get note names for each string position
+    func getStringNotes(tuning: GuitarTuning = .standard, useFlats: Bool = false) -> [String?] {
+        return frets.enumerated().map { stringIndex, fret in
+            if fret == -1 {
+                return nil  // Muted string
+            } else {
+                let openStringMIDI = tuning.midiNotes[stringIndex]
+                let noteMIDI = openStringMIDI + (baseFret - 1) + fret  
+                return Self.midiToNoteName(noteMIDI, useFlats: useFlats)  // 🔧 Pass useFlats
+            }
+        }
+    }
+    
+    /// Get note names without octave numbers
+    func getNoteNamesOnly(tuning: GuitarTuning = .standard, useFlats: Bool = false) -> [String?] {
+        return getStringNotes(tuning: tuning, useFlats: useFlats).map { noteName in
+            guard let name = noteName else { return nil }
+            // Remove octave number (keep just note name)
+            return String(name.dropLast(1))
+        }
+    }
+    
+    /// Convert MIDI note number to note name with octave
+    /// - Parameters:
+    ///   - midiNote: MIDI note number (0-127)
+    ///   - useFlats: If true, uses flats (♭) instead of sharps (♯) for accidentals
+    static func midiToNoteName(_ midiNote: Int, useFlats: Bool = false) -> String {
+        let noteNames = useFlats ?
+            ["C", "D♭", "D", "E♭", "E", "F", "G♭", "G", "A♭", "A", "B♭", "B"] :
+            ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"]
+        
+        let noteIndex = midiNote % 12
+        let octave = (midiNote / 12) - 1
+        return "\(noteNames[noteIndex])\(octave)"
+    }
+    
+    /// Get display text for dots based on display mode
+    func getDisplayText(mode: ChordDisplayMode, tuning: GuitarTuning = .standard, useFlats: Bool = false) -> [String?] {
+        let noteNames = mode == .notesNoOctave ?
+            getNoteNamesOnly(tuning: tuning, useFlats: useFlats) :
+            getStringNotes(tuning: tuning, useFlats: useFlats)
+        
+        return frets.enumerated().map { stringIndex, fret in
+            if fret == -1 {
+                return nil  // Muted string
+            }
+            
+            switch mode {
+            case .fingers:
+                return "\(fingers[stringIndex])"
+            case .notes, .notesNoOctave:
+                return noteNames[stringIndex]
+            case .both:
+                if let noteName = noteNames[stringIndex] {
+                    return "\(noteName)\n\(fingers[stringIndex])"
+                } else {
+                    return "\(fingers[stringIndex])"
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Chord Display Modes and Note Analysis
+
+public enum ChordDisplayMode: String, CaseIterable {
+    case fingers = "Fingers"
+    case notes = "Note Names"
+    case notesNoOctave = "Notes (No Octave)"
+    case both = "Notes + Fingers"
+    
+    public var description: String {
+        return self.rawValue
+    }
+}
+
+enum NoteRole {
+    case root
+    case third
+    case fifth
+    case seventh
+    case other
+    
+    var color: NSColor {
+        switch self {
+        case .root: return .systemRed
+        case .third: return .systemBlue
+        case .fifth: return .systemGreen
+        case .seventh: return .systemPurple
+        case .other: return .labelColor
+        }
+    }
+}
+
+extension ChordPosition {
+    
+    /// Analyze note roles based on chord key
+    func analyzeNoteRoles(tuning: GuitarTuning = .standard) -> [NoteRole?] {
+        let noteNames = getNoteNamesOnly(tuning: tuning)
+        let rootNote = key.display.symbol.replacingOccurrences(of: "♯", with: "#").replacingOccurrences(of: "♭", with: "b")
+        
+        return noteNames.map { noteName in
+            guard let note = noteName else { return nil }
+            
+            // Simple note role analysis (can be enhanced)
+            let normalizedNote = note.replacingOccurrences(of: "♯", with: "#").replacingOccurrences(of: "♭", with: "b")
+            
+            if normalizedNote.contains(rootNote) {
+                return .root
+            }
+            
+            // TODO: Add more sophisticated interval analysis
+            // For now, just mark root notes
+            return .other
+        }
+    }
+    
+    /// Get display text for each string based on mode
+    func getDisplayText(mode: ChordDisplayMode, tuning: GuitarTuning = .standard) -> [String?] {
+        let noteNames = mode == .notesNoOctave ?
+            getNoteNamesOnly(tuning: tuning) :
+            getStringNotes(tuning: tuning)
+        
+        return frets.enumerated().map { stringIndex, fret in
+            if fret == -1 {
+                return nil  // Muted string
+            }
+            
+            switch mode {
+            case .fingers:
+                return "\(fingers[stringIndex])"
+            case .notes, .notesNoOctave:
+                return noteNames[stringIndex]
+            case .both:
+                if let noteName = noteNames[stringIndex] {
+                    return "\(noteName)\n\(fingers[stringIndex])"
+                } else {
+                    return "\(fingers[stringIndex])"
+                }
+            }
+        }
+    }
+}
 
 extension CGFloat {
     func shouldMirror(_ mirror: Bool, offset: CGFloat) -> CGFloat {

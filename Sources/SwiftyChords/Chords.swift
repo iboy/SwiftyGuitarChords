@@ -6,7 +6,7 @@ public struct Chords {
     public enum Group {
         case major, minor, diminished, augmented, suspended, other
     }
-
+    
     public enum Key: String, CaseIterable, Codable, Comparable {
         case c = "C"
         case cSharp = "C#"
@@ -71,7 +71,7 @@ public struct Chords {
             }
         }
     }
-
+    
     public enum Suffix: String, CaseIterable, Codable, Comparable {
         case major = "major"
         case minor = "minor"
@@ -312,7 +312,7 @@ public struct Chords {
             }
         }
     }
-
+    
     /// Display options for the chord name
     public struct Name {
         /// Init the struct
@@ -344,23 +344,89 @@ public struct Chords {
             }
         }
     }
-    
+    // making swift 6 safe
+    nonisolated(unsafe)
     public static var guitar = Chords.readData(for: "GuitarChords")
+
+    nonisolated(unsafe)
     public static var ukulele = Chords.readData(for: "UkuleleChords")
+    
+    // Replace the readData function in Chords.swift with this:
 
     private static func readData(for name: String) -> [ChordPosition] {
         do {
-            var resourceUrl = Bundle.module.resourceURL
-            resourceUrl?.appendPathComponent(name)
-            resourceUrl?.appendPathExtension("json")
-            if let fileUrl = resourceUrl {
-                let data = try Data(contentsOf: fileUrl)
-                let allChords = try JSONDecoder().decode([ChordPosition].self, from: data)
-                return allChords
+            var resourceUrl: URL?
+            
+            // Try different bundle locations in order of preference
+            
+            // 1. Try main bundle (when package is integrated into an app)
+            resourceUrl = Bundle.main.url(forResource: name, withExtension: "json")
+            
+            // Try with Resources path in main bundle
+            if resourceUrl == nil {
+                resourceUrl = Bundle.main.url(forResource: "Resources/\(name)", withExtension: "json")
             }
+            
+            // 2. Search through all available bundles
+            if resourceUrl == nil {
+                for bundle in Bundle.allBundles {
+                    // Try direct resource access
+                    resourceUrl = bundle.url(forResource: name, withExtension: "json")
+                    if resourceUrl != nil {
+                        #if DEBUG
+                        print("Found \(name).json in bundle: \(bundle.bundlePath)")
+                        #endif
+                        break
+                    }
+                    
+                    // Try with Resources subfolder
+                    resourceUrl = bundle.url(forResource: "Resources/\(name)", withExtension: "json")
+                    if resourceUrl != nil {
+                        #if DEBUG
+                        print("Found \(name).json in Resources folder of bundle: \(bundle.bundlePath)")
+                        #endif
+                        break
+                    }
+                }
+            }
+            
+            // 3. Try to find bundle that might contain SwiftyChords
+            if resourceUrl == nil {
+                let swiftyChordsBundle = Bundle.allBundles.first { bundle in
+                    bundle.bundlePath.lowercased().contains("swiftychords") ||
+                    bundle.bundleIdentifier?.contains("SwiftyChords") == true
+                }
+                
+                if let bundle = swiftyChordsBundle {
+                    resourceUrl = bundle.url(forResource: name, withExtension: "json")
+                    if resourceUrl == nil {
+                        resourceUrl = bundle.url(forResource: "Resources/\(name)", withExtension: "json")
+                    }
+                }
+            }
+            
+            guard let fileUrl = resourceUrl else {
+                #if DEBUG
+                print("Could not find \(name).json in any bundle location")
+                print("Searched bundles:")
+                for bundle in Bundle.allBundles {
+                    print("  - \(bundle.bundlePath)")
+                }
+                #endif
+                return []
+            }
+            
+            #if DEBUG
+            print("Successfully found \(name).json at: \(fileUrl)")
+            #endif
+            
+            let data = try Data(contentsOf: fileUrl)
+            let allChords = try JSONDecoder().decode([ChordPosition].self, from: data)
+            return allChords
+            
         } catch {
             #if DEBUG
-            print("There is no chord data:", error)
+            print("There is no chord data for \(name):", error)
             #endif
         }
         return []
