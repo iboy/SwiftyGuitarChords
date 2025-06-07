@@ -435,3 +435,41 @@ public struct Chords {
 }
 
 private class BundleFinder {}
+
+extension Chords.Key {
+    /// Keys that use flat accidentals based on key signature theory
+    var preferFlats: Bool {
+        switch self {
+        // Flat major keys: F, Bb, Eb, Ab, Db, Gb, Cb
+        case .f, .bFlat, .eFlat, .aFlat, .dFlat, .gFlat:
+            return true
+        default:
+            return false
+        }
+    }
+    
+    /// Keys that use sharp accidentals based on key signature theory
+    var preferSharps: Bool {
+        switch self {
+        // Sharp major keys: G, D, A, E, B, F#, C#
+        case .g, .d, .a, .e, .b, .fSharp, .cSharp:
+            return true
+        default:
+            return false
+        }
+    }
+}
+
+
+extension Chords.Suffix {
+    /// Get the relative minor key for major chord types
+    /// This helps determine if a minor chord should use sharps or flats
+    var impliedMinorKey: Chords.Key? {
+        // Only relevant for minor chord types
+        guard self.group == .minor else { return nil }
+        
+        // For minor chords, we need to know which family they belong to
+        // This is determined by the root note (key), not the suffix
+        return nil // We'll handle this in the combined logic
+    }
+}

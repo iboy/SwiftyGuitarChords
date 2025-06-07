@@ -1,10 +1,3 @@
-//
-//  File.swift
-//
-//
-//  Created by Beau Nouvelle on 2020-03-29.
-//
-
 import Foundation
 import CoreGraphics
 
@@ -168,7 +161,8 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
             stringConfig: stringConfig,
             origin: origin,
             showFingers: showFingers,
-            forScreen: forScreen
+            forScreen: forScreen,
+            displayMode: displayMode
         )
         let dots = dotsLayer(
             stringConfig: stringConfig,
@@ -210,10 +204,40 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
         showNut: Bool = true
     ) -> CAShapeLayer {
         let layer = CAShapeLayer()
+        // 🆕 ADD THIS DEBUG:
+            print("🎨 stringsAndFretsLayer: forScreen=\(forScreen)")
+        
+        let resolvedPrimaryColor: CGColor
+        if forScreen {
+            // Save current appearance
+            let previousAppearance = NSAppearance.current
+            
+            // Set current appearance for color resolution
+            NSAppearance.current = NSApp.effectiveAppearance
+            
+            // Get the color in the correct appearance context
+            let color = NSColor.labelColor.cgColor
+            
+            // Restore previous appearance
+            NSAppearance.current = previousAppearance
+            
+            resolvedPrimaryColor = color
+        } else {
+            resolvedPrimaryColor = SWIFTColor.black.cgColor
+        }
 
-        let primaryColor =
-            forScreen ? primaryColor.cgColor : SWIFTColor.black.cgColor
-
+        // 🆕 ADD THIS DEBUG:
+           print("🎨 Raw primaryColor: \(resolvedPrimaryColor)")
+           print("🎨 Current appearance: \(NSApp.effectiveAppearance.name)")
+           print("🎨 Label color right now: \(NSColor.labelColor)")
+        
+        print("🎨 stringsAndFretsLayer: forScreen=\(forScreen)")
+        print("🎨 NSColor.labelColor: \(NSColor.labelColor)")
+        print("🎨 Converted to CGColor: \(NSColor.labelColor.cgColor)")  // 🆕 This is the key!
+        print("🎨 Actually using: \(resolvedPrimaryColor)")
+        print("🎨 Current appearance: \(NSApp.effectiveAppearance.name)")
+        
+           
         // Strings
         let stringPath = CGMutablePath()
 
@@ -233,7 +257,7 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
         let stringLayer = CAShapeLayer()
         stringLayer.path = stringPath
         stringLayer.lineWidth = stringConfig.spacing / 24
-        stringLayer.strokeColor = primaryColor
+        stringLayer.strokeColor = resolvedPrimaryColor
         layer.addSublayer(stringLayer)
 
         // Frets
@@ -271,7 +295,7 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
                     position: CGPoint(x: transX, y: transY)
                 )
                 txtLayer.path = txtPath
-                txtLayer.fillColor = primaryColor
+                txtLayer.fillColor = resolvedPrimaryColor
                 fretLayer.addSublayer(txtLayer)
             }
 
@@ -286,7 +310,7 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
             fret.path = fretPath
             fret.lineWidth = lineWidth
             fret.lineCap = .square
-            fret.strokeColor = primaryColor
+            fret.strokeColor = resolvedPrimaryColor
             fretLayer.addSublayer(fret)
         }
 
@@ -297,8 +321,23 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
 
     private func nameLayer(fretConfig: LineConfig, origin: CGPoint, center: CGFloat, forScreen: Bool, name: Chords.Name) -> CAShapeLayer {
 
-        let primaryColor = forScreen ? primaryColor.cgColor : SWIFTColor.black.cgColor
+        //let primaryColor = forScreen ? NSColor.labelColor.cgColor : SWIFTColor.black.cgColor
+        //let primaryColor = forScreen ? primaryColor.cgColor : SWIFTColor.black.cgColor
 
+        // REPLACE WITH:
+        let primaryColor: CGColor
+        if forScreen {
+            let previousAppearance = NSAppearance.current
+            NSAppearance.current = NSApp.effectiveAppearance
+            let color = NSColor.labelColor.cgColor
+            NSAppearance.current = previousAppearance
+            primaryColor = color
+        } else {
+            primaryColor = SWIFTColor.black.cgColor
+        }
+        
+        
+        
         var displayKey: String {
             switch name.key {
             case .raw:
@@ -331,11 +370,35 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
         return shape
     }
 
-    private func barreLayer(fretConfig: LineConfig, stringConfig: LineConfig, origin: CGPoint, showFingers: Bool, forScreen: Bool) -> CAShapeLayer {
+    private func barreLayer(
+        fretConfig: LineConfig,
+        stringConfig: LineConfig,
+        origin: CGPoint,
+        showFingers: Bool,
+        forScreen: Bool,
+        displayMode: ChordDisplayMode = .fingers
+    ) -> CAShapeLayer {
         let layer = CAShapeLayer()
 
-        let primaryColor = forScreen ? primaryColor.cgColor : SWIFTColor.black.cgColor
-        let backgroundColor = forScreen ? backgroundColor.cgColor : SWIFTColor.white.cgColor
+        let primaryColor: CGColor
+        let backgroundColor: CGColor
+
+        if forScreen {
+            // Force appearance context for both colors
+            let previousAppearance = NSAppearance.current
+            NSAppearance.current = NSApp.effectiveAppearance
+            
+            let resolvedPrimaryColor = NSColor.labelColor.cgColor
+            let resolvedBackgroundColor = NSColor.windowBackgroundColor.cgColor
+            
+            NSAppearance.current = previousAppearance
+            
+            primaryColor = resolvedPrimaryColor
+            backgroundColor = resolvedBackgroundColor
+        } else {
+            primaryColor = SWIFTColor.black.cgColor
+            backgroundColor = SWIFTColor.white.cgColor
+        }
 
         for barre in barres {
             let barrePath = CGMutablePath()
@@ -374,7 +437,7 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
 
             layer.addSublayer(barreLayer)
 
-            if showFingers {
+            if showFingers && displayMode != .notesNoOctave && displayMode != .blank {
                 let fingerLayer = CAShapeLayer()
                 let txtFont = SWIFTFont.systemFont(ofSize: stringConfig.margin, weight: .medium)
                 let txtRect = CGRect(x: 0, y: 0, width: stringConfig.spacing, height: fretConfig.spacing)
@@ -407,8 +470,25 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
         
         let layer = CAShapeLayer()
 
-        let primaryColor = forScreen ? primaryColor.cgColor : SWIFTColor.black.cgColor
-        let backgroundColor = forScreen ? backgroundColor.cgColor : SWIFTColor.white.cgColor
+        let primaryColor: CGColor
+        let backgroundColor: CGColor
+
+        if forScreen {
+            // Force appearance context for both colors
+            let previousAppearance = NSAppearance.current
+            NSAppearance.current = NSApp.effectiveAppearance
+            
+            let resolvedPrimaryColor = NSColor.labelColor.cgColor
+            let resolvedBackgroundColor = NSColor.windowBackgroundColor.cgColor
+            
+            NSAppearance.current = previousAppearance
+            
+            primaryColor = resolvedPrimaryColor
+            backgroundColor = resolvedBackgroundColor
+        } else {
+            primaryColor = SWIFTColor.black.cgColor
+            backgroundColor = SWIFTColor.white.cgColor
+        }
         
         for index in 0..<frets.count {
             let fret = frets[index]
@@ -435,7 +515,7 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
                 continue
             }
 
-            // Draw cross above nut ❌
+            // Draw cross above nut ❌
             if fret == -1 {
                 let size = fretConfig.spacing * 0.33
                 let crossX = ((CGFloat(index) * stringConfig.spacing + stringConfig.margin) - size / 2 + origin.x).shouldMirror(mirror, offset: rect.width - size)
@@ -464,17 +544,24 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
             }
 
             if barres.contains(fret) {
-                if index + 1 < frets.count {
-                    let next = index + 1
-                    if frets[next] >= fret {
-                        continue
+                // 🆕 NEW: In notes mode, draw individual dots instead of barre
+                if displayMode == .notesNoOctave {
+                    print("🎯 Drawing individual note dot instead of barre for string \(index + 1)")
+                    // DON'T continue - let it fall through to draw individual dot below
+                } else {
+                    // Original barre logic - skip drawing individual dots
+                    if index + 1 < frets.count {
+                        let next = index + 1
+                        if frets[next] >= fret {
+                            continue  // Skip drawing individual dot
+                        }
                     }
-                }
 
-                if index - 1 > 0 {
-                    let prev = index - 1
-                    if frets[prev] >= fret {
-                        continue
+                    if index - 1 > 0 {
+                        let prev = index - 1
+                        if frets[prev] >= fret {
+                            continue  // Skip drawing individual dot
+                        }
                     }
                 }
             }
@@ -491,10 +578,33 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
 
             layer.addSublayer(dotLayer)
 
-            // 🔧 NEW: Use display text based on mode
-            if showFingers {
+            // Use display text based on mode
+            if showFingers  {
+                // Get the display text for this string
+                let displayTexts = getDisplayText(mode: displayMode, tuning: tuning)
+                let displayText = displayTexts[index] ?? "\(fingers[index])"
+                
+                // 🆕 DYNAMIC FONT SIZING based on text length and content
+                let baseFontSize = stringConfig.margin
+                let fontSize: CGFloat
+                
+                // Adjust font size based on text characteristics
+                if displayText.count <= 1 {
+                    // Single character (finger numbers, single notes like "C", "E")
+                    fontSize = baseFontSize
+                } else if displayText.count == 2 && (displayText.contains("♭") || displayText.contains("♯")) {
+                    // Accidental notes like "B♭", "F♯"
+                    fontSize = baseFontSize * 0.75
+                } else if displayText.contains("\n") {
+                    // Multi-line text (both mode)
+                    fontSize = baseFontSize * 0.6
+                } else {
+                    // Other cases (shouldn't happen but fallback)
+                    fontSize = baseFontSize * 0.8
+                }
+
                 let txtFont = SWIFTFont.systemFont(
-                    ofSize: stringConfig.margin,
+                    ofSize: fontSize,
                     weight: .medium
                 )
                 let txtRect = CGRect(
@@ -504,12 +614,7 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
                     height: fretConfig.spacing
                 )
 
-                // Use the calculated display text
-                let displayTexts = getDisplayText(mode: displayMode, tuning: tuning)
-
-                print("🎵 Display mode: \(displayMode), Texts: \(displayTexts)")
-                let displayText = displayTexts[index] ?? "\(fingers[index])"
-
+                print("🎵 Display mode: \(displayMode), Text: '\(displayText)', Font size: \(fontSize)")
 
                 let txtPath = displayText.path(
                     font: txtFont,
@@ -567,7 +672,7 @@ public struct GuitarTuning {
     
     
     
-    // MARK: - Preset Tunings (Fender Tune Compatible)
+    // MARK: - Preset Tunings
     
     // Standard and Basic Variations
     public static let standard = GuitarTuning(name: "Standard", noteNames: ["E", "A", "D", "G", "B", "E"])
@@ -630,20 +735,71 @@ extension GuitarTuning: Equatable, Hashable {
 
 public extension ChordPosition {
     
-    /// Get note names for each string position
-    func getStringNotes(tuning: GuitarTuning = .standard, useFlats: Bool = false) -> [String?] {
+    /// Get note names with intelligent enharmonic spelling
+    func getStringNotes(tuning: GuitarTuning = .standard) -> [String?] {
+        // NEW: Determine spelling preference based on chord key and type
+        let useFlats = determineAccidentalPreference()
+        
         return frets.enumerated().map { stringIndex, fret in
             if fret == -1 {
                 return nil  // Muted string
             } else {
                 let openStringMIDI = tuning.midiNotes[stringIndex]
-                let noteMIDI = openStringMIDI + (baseFret - 1) + fret  
-                return Self.midiToNoteName(noteMIDI, useFlats: useFlats)  // 🔧 Pass useFlats
+                let noteMIDI = openStringMIDI + (baseFret - 1) + fret
+                return Self.midiToNoteName(noteMIDI, useFlats: useFlats)  // 🆕 Pass useFlats
             }
         }
     }
     
-    /// Get note names without octave numbers
+    
+    /// Get note names with music theory-based enharmonic spelling
+    func getStringNotes(tuning: GuitarTuning = .standard, useFlats: Bool = false) -> [String?] {
+        // 🎯 MUSIC THEORY APPROACH: Base on key signatures
+        let intelligentUseFlats: Bool
+        
+        if useFlats {
+            // Explicit override
+            intelligentUseFlats = true
+        } else {
+            // Apply key signature logic based only on the key
+            intelligentUseFlats = determineAccidentalPreference()
+        }
+        
+        return frets.enumerated().map { stringIndex, fret in
+            if fret == -1 {
+                return nil  // Muted string
+            } else {
+                let openStringMIDI = tuning.midiNotes[stringIndex]
+                let noteMIDI = openStringMIDI + (baseFret - 1) + fret
+                return Self.midiToNoteName(noteMIDI, useFlats: intelligentUseFlats)
+            }
+        }
+    }
+
+    /// Determine accidental preference based on music theory key signatures
+    private func determineAccidentalPreference() -> Bool {
+        // Check explicit key preferences first
+        switch key {
+        // Sharp family keys - always use sharps
+        case .g, .d, .a, .e, .b, .fSharp, .cSharp:
+            return false // Use sharps
+            
+        // Flat family keys - always use flats
+        case .f, .bFlat, .eFlat, .aFlat, .dFlat, .gFlat:
+            return true // Use flats
+            
+        // Special case: C can be either
+        case .c:
+            // C major = neutral, C minor = flat family (relative to Eb major)
+            return suffix.group == .minor || suffix.group == .diminished
+            
+        default:
+            // Default to sharps for any other cases
+            return false
+        }
+    }
+    
+    /// Get note names without octave numbers, with intelligent spelling
     func getNoteNamesOnly(tuning: GuitarTuning = .standard, useFlats: Bool = false) -> [String?] {
         return getStringNotes(tuning: tuning, useFlats: useFlats).map { noteName in
             guard let name = noteName else { return nil }
@@ -652,10 +808,7 @@ public extension ChordPosition {
         }
     }
     
-    /// Convert MIDI note number to note name with octave
-    /// - Parameters:
-    ///   - midiNote: MIDI note number (0-127)
-    ///   - useFlats: If true, uses flats (♭) instead of sharps (♯) for accidentals
+    /// Enhanced MIDI to note name conversion with proper enharmonic spelling
     static func midiToNoteName(_ midiNote: Int, useFlats: Bool = false) -> String {
         let noteNames = useFlats ?
             ["C", "D♭", "D", "E♭", "E", "F", "G♭", "G", "A♭", "A", "B♭", "B"] :
@@ -666,7 +819,7 @@ public extension ChordPosition {
         return "\(noteNames[noteIndex])\(octave)"
     }
     
-    /// Get display text for dots based on display mode
+    /// Get display text for each string based on mode (with intelligent spelling)
     func getDisplayText(mode: ChordDisplayMode, tuning: GuitarTuning = .standard, useFlats: Bool = false) -> [String?] {
         let noteNames = mode == .notesNoOctave ?
             getNoteNamesOnly(tuning: tuning, useFlats: useFlats) :
@@ -680,26 +833,30 @@ public extension ChordPosition {
             switch mode {
             case .fingers:
                 return "\(fingers[stringIndex])"
-            case .notes, .notesNoOctave:
+            case .notesNoOctave:
                 return noteNames[stringIndex]
-            case .both:
-                if let noteName = noteNames[stringIndex] {
-                    return "\(noteName)\n\(fingers[stringIndex])"
-                } else {
-                    return "\(fingers[stringIndex])"
-                }
+            case .blank:
+                return ""  // 🆕 Empty string = plain circle
+            //case .both:
+            //    if let noteName = noteNames[stringIndex] {
+            //        return "\(noteName)\n\(fingers[stringIndex])"
+            //    } else {
+            //        return "\(fingers[stringIndex])"
+            //    }
             }
         }
     }
+
 }
 
 // MARK: - Chord Display Modes and Note Analysis
 
 public enum ChordDisplayMode: String, CaseIterable {
     case fingers = "Fingers"
-    case notes = "Note Names"
-    case notesNoOctave = "Notes (No Octave)"
-    case both = "Notes + Fingers"
+    //case notes = "Note Names"
+    case notesNoOctave = "Notes"
+    //case both = "Notes + Fingers"
+    case blank = "Blank"
     
     public var description: String {
         return self.rawValue
@@ -761,14 +918,16 @@ extension ChordPosition {
             switch mode {
             case .fingers:
                 return "\(fingers[stringIndex])"
-            case .notes, .notesNoOctave:
+            case .notesNoOctave:
                 return noteNames[stringIndex]
-            case .both:
-                if let noteName = noteNames[stringIndex] {
-                    return "\(noteName)\n\(fingers[stringIndex])"
-                } else {
-                    return "\(fingers[stringIndex])"
-                }
+            case .blank:
+                return ""  // 🆕 Empty string = plain circle
+            //case .both:
+            //    if let noteName = noteNames[stringIndex] {
+            //        return "\(noteName)\n\(fingers[stringIndex])"
+            //    } else {
+            //        return "\(fingers[stringIndex])"
+            //    }
             }
         }
     }
