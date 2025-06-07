@@ -437,7 +437,7 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
 
             layer.addSublayer(barreLayer)
 
-            if showFingers && displayMode != .notesNoOctave && displayMode != .blank {
+            if showFingers && displayMode != .notesNoOctave && displayMode != .functions && displayMode != .blank {
                 let fingerLayer = CAShapeLayer()
                 let txtFont = SWIFTFont.systemFont(ofSize: stringConfig.margin, weight: .medium)
                 let txtRect = CGRect(x: 0, y: 0, width: stringConfig.spacing, height: fretConfig.spacing)
@@ -545,7 +545,7 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
 
             if barres.contains(fret) {
                 // 🆕 NEW: In notes mode, draw individual dots instead of barre
-                if displayMode == .notesNoOctave {
+                if displayMode == .notesNoOctave || displayMode == .functions {
                     print("🎯 Drawing individual note dot instead of barre for string \(index + 1)")
                     // DON'T continue - let it fall through to draw individual dot below
                 } else {
@@ -632,6 +632,187 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
         return layer
     }
 
+    // 🆕 CHORD THEORY FUNCTIONS - ADD INSIDE ChordPosition STRUCT
+        
+        /// Get scale degree functions for each string (1, ♭3, 5, ♭7, etc.)
+        func getScaleDegrees(tuning: GuitarTuning = .standard) -> [String?] {
+            let noteNames = getNoteNamesOnly(tuning: tuning)
+            let rootNote = key.display.symbol
+            
+            return noteNames.map { noteName in
+                guard let note = noteName else { return nil }
+                return calculateScaleDegree(note: note, root: rootNote, suffix: suffix)
+            }
+        }
+        
+        private func calculateScaleDegree(note: String, root: String, suffix: Chords.Suffix) -> String {
+            let rootSemitone = noteToSemitone(root)
+            let noteSemitone = noteToSemitone(note)
+            let interval = (noteSemitone - rootSemitone + 12) % 12
+            return intervalToScaleDegree(interval: interval, chordType: suffix)
+        }
+        
+        private func noteToSemitone(_ noteName: String) -> Int {
+            let noteMap: [String: Int] = [
+                "C": 0, "C♯": 1, "D♭": 1,
+                "D": 2, "D♯": 3, "E♭": 3,
+                "E": 4,
+                "F": 5, "F♯": 6, "G♭": 6,
+                "G": 7, "G♯": 8, "A♭": 8,
+                "A": 9, "A♯": 10, "B♭": 10,
+                "B": 11
+            ]
+            
+            let normalizedNote = noteName
+                .replacingOccurrences(of: "#", with: "♯")
+                .replacingOccurrences(of: "b", with: "♭")
+            
+            return noteMap[normalizedNote] ?? 0
+        }
+        
+        private func intervalToScaleDegree(interval: Int, chordType: Chords.Suffix) -> String {
+            switch interval {
+            case 0: return "R"
+            case 1: return "♭2"
+            case 2:
+                if isExtendedChord(chordType) {
+                    return "9"
+                } else {
+                    return "2"
+                }
+            case 3:
+                if isMinorChord(chordType) || isDiminishedChord(chordType) {
+                    return "♭3"
+                } else if isExtendedChord(chordType) && hasSharpNine(chordType) {
+                    return "♯9"
+                } else {
+                    return "♯2"
+                }
+            case 4: return "3"
+            case 5:
+                if isExtendedChord(chordType) && hasEleventh(chordType) {
+                    return "11"
+                } else {
+                    return "4"
+                }
+            case 6:
+                if isDiminishedChord(chordType) {
+                    return "♭5"
+                } else if isAugmentedChord(chordType) {
+                    return "♯5"
+                } else if isExtendedChord(chordType) && hasSharpEleventh(chordType) {
+                    return "♯11"
+                } else {
+                    return "♭5"
+                }
+            case 7: return "5"
+            case 8:
+                if isAugmentedChord(chordType) {
+                    return "♯5"
+                } else {
+                    return "♭6"
+                }
+            case 9:
+                if isExtendedChord(chordType) && hasThirteenth(chordType) {
+                    return "13"
+                } else {
+                    return "6"
+                }
+            case 10:
+                if hasSeventh(chordType) {
+                    return "♭7"
+                } else if isExtendedChord(chordType) && hasFlatNine(chordType) {
+                    return "♭9"
+                } else {
+                    return "♯6"
+                }
+            case 11:
+                if hasMajorSeventh(chordType) {
+                    return "7"
+                } else {
+                    return "♭7"
+                }
+            default: return "?"
+            }
+        }
+        
+        // MARK: - Helper Functions
+        
+        private func isMinorChord(_ suffix: Chords.Suffix) -> Bool {
+            return suffix.group == .minor
+        }
+        
+        private func isDiminishedChord(_ suffix: Chords.Suffix) -> Bool {
+            return suffix.group == .diminished
+        }
+        
+        private func isAugmentedChord(_ suffix: Chords.Suffix) -> Bool {
+            return suffix.group == .augmented
+        }
+        
+        private func isExtendedChord(_ suffix: Chords.Suffix) -> Bool {
+            switch suffix {
+            case .nine, .augNine, .sevenFlatNine, .sevenSharpNine, .majorNine, .minorNine,
+                 .eleven, .nineSharpEleven, .majorEleven, .minorEleven, .minorMajorEleven,
+                 .thirteen, .majorThirteen:
+                return true
+            default:
+                return false
+            }
+        }
+        
+        private func hasSeventh(_ suffix: Chords.Suffix) -> Bool {
+            switch suffix {
+            case .seven, .sevenFlatFive, .augSeven, .sevenFlatNine, .sevenSharpNine,
+                 .sevenSharpFive, .minorSeven, .minorSevenFlatFive, .minorMajorSeven,
+                 .minorMajorSeventFlatFive:
+                return true
+            default:
+                return false
+            }
+        }
+        
+        private func hasMajorSeventh(_ suffix: Chords.Suffix) -> Bool {
+            switch suffix {
+            case .majorSeven, .majorSevenFlatFive, .majorSevenSharpFive,
+                 .minorMajorSeven, .minorMajorSeventFlatFive:
+                return true
+            default:
+                return false
+            }
+        }
+        
+        private func hasSharpNine(_ suffix: Chords.Suffix) -> Bool {
+            return suffix == .sevenSharpNine
+        }
+        
+        private func hasFlatNine(_ suffix: Chords.Suffix) -> Bool {
+            return suffix == .sevenFlatNine
+        }
+        
+        private func hasEleventh(_ suffix: Chords.Suffix) -> Bool {
+            switch suffix {
+            case .eleven, .nineSharpEleven, .majorEleven, .minorEleven, .minorMajorEleven:
+                return true
+            default:
+                return false
+            }
+        }
+        
+        private func hasSharpEleventh(_ suffix: Chords.Suffix) -> Bool {
+            return suffix == .nineSharpEleven
+        }
+        
+        private func hasThirteenth(_ suffix: Chords.Suffix) -> Bool {
+            switch suffix {
+            case .thirteen, .majorThirteen:
+                return true
+            default:
+                return false
+            }
+        }
+    
+    
 }
 
 
@@ -835,6 +1016,9 @@ public extension ChordPosition {
                 return "\(fingers[stringIndex])"
             case .notesNoOctave:
                 return noteNames[stringIndex]
+            case .functions:
+                let scaleDegrees = getScaleDegrees(tuning: tuning)
+                return scaleDegrees[stringIndex]
             case .blank:
                 return ""  // 🆕 Empty string = plain circle
             //case .both:
@@ -853,9 +1037,8 @@ public extension ChordPosition {
 
 public enum ChordDisplayMode: String, CaseIterable {
     case fingers = "Fingers"
-    //case notes = "Note Names"
     case notesNoOctave = "Notes"
-    //case both = "Notes + Fingers"
+    case functions = "Functions"
     case blank = "Blank"
     
     public var description: String {
@@ -920,6 +1103,9 @@ extension ChordPosition {
                 return "\(fingers[stringIndex])"
             case .notesNoOctave:
                 return noteNames[stringIndex]
+            case .functions:  // 🆕 ADD THIS CASE!
+                let scaleDegrees = getScaleDegrees(tuning: tuning)
+                return scaleDegrees[stringIndex]
             case .blank:
                 return ""  // 🆕 Empty string = plain circle
             //case .both:
