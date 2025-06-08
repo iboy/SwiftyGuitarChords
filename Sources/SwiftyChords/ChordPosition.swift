@@ -56,8 +56,9 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
         forPrint: Bool = false,
         mirror: Bool = false,
         showNut: Bool = true,
-        displayMode: ChordDisplayMode = .fingers,     // 🆕 NEW: What to show on dots
-        tuningOverride: GuitarTuning? = nil           // 🆕 NEW: Runtime tuning override
+        displayMode: ChordDisplayMode = .fingers,
+        tuningOverride: GuitarTuning? = nil,
+        functionColorMap: [String: SWIFTColor] = [:]
     ) -> CAShapeLayer {
         return privateLayer(
             rect: rect,
@@ -66,8 +67,9 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
             forScreen: !forPrint,
             mirror: mirror,
             showNut: showNut,
-            displayMode: displayMode,                 // 🆕 Pass through
-            tuningOverride: tuningOverride            // 🆕 Pass through
+            displayMode: displayMode,
+            tuningOverride: tuningOverride,
+            functionColorMap: functionColorMap
             
         )
     }
@@ -107,8 +109,9 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
         forScreen: Bool,
         mirror: Bool = false,
         showNut: Bool = true,
-        displayMode: ChordDisplayMode = .fingers,     // 🆕 NEW
-        tuningOverride: GuitarTuning? = nil           // 🆕 NEW
+        displayMode: ChordDisplayMode = .fingers,
+        tuningOverride: GuitarTuning? = nil,
+        functionColorMap: [String: SWIFTColor] = [:]
     ) -> CAShapeLayer {
         // Determine which tuning to use
         let effectiveTuning = tuningOverride ?? .standard
@@ -172,8 +175,9 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
             forScreen: forScreen,
             rect: rect,
             mirror: mirror,
-            displayMode: displayMode,        // 🆕 NEW
-            tuning: effectiveTuning          // 🆕 NEW
+            displayMode: displayMode,
+            tuning: effectiveTuning,
+            functionColorMap: functionColorMap
         )
 
         layer.addSublayer(stringsAndFrets)
@@ -464,8 +468,9 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
         forScreen: Bool,
         rect: CGRect,
         mirror: Bool,
-        displayMode: ChordDisplayMode = .fingers,     // 🆕 NEW
-        tuning: GuitarTuning = .standard              // 🆕 NEW
+        displayMode: ChordDisplayMode = .fingers,
+        tuning: GuitarTuning = .standard,
+        functionColorMap: [String: SWIFTColor] = [:]
     ) -> CAShapeLayer {
         
         let layer = CAShapeLayer()
@@ -574,7 +579,19 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
 
             let dotLayer = CAShapeLayer()
             dotLayer.path = dotPath
-            dotLayer.fillColor = primaryColor
+            // 🆕 NEW: Check for function coloring
+            let functionColors = self.getFunctionColors(
+                colorMap: functionColorMap,
+                tuning: tuning
+            )
+
+            if let functionColor = functionColors[index] {
+                // Use function color
+                dotLayer.fillColor = functionColor.cgColor
+            } else {
+                // Use default color
+                dotLayer.fillColor = primaryColor
+            }
 
             layer.addSublayer(dotLayer)
 
@@ -632,7 +649,8 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
         return layer
     }
 
-    // 🆕 CHORD THEORY FUNCTIONS - ADD INSIDE ChordPosition STRUCT
+    // 🆕 CHORD THEORY FUNCTIONS
+        
         
         /// Get scale degree functions for each string (1, ♭3, 5, ♭7, etc.)
         func getScaleDegrees(tuning: GuitarTuning = .standard) -> [String?] {
@@ -811,8 +829,7 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
                 return false
             }
         }
-    
-    
+        
 }
 
 
@@ -916,6 +933,19 @@ extension GuitarTuning: Equatable, Hashable {
 
 public extension ChordPosition {
     
+
+    /// Colorize note: Get function colors using a simple color map
+        func getFunctionColors(
+            colorMap: [String: SWIFTColor] = [:],
+            tuning: GuitarTuning = .standard
+        ) -> [SWIFTColor?] {
+            let scaleDegrees = getScaleDegrees(tuning: tuning)
+            
+            return scaleDegrees.map { scaleDegreeName in
+                guard let scaleDegreeName = scaleDegreeName else { return nil }
+                return colorMap[scaleDegreeName]
+            }
+        }
     /// Get note names with intelligent enharmonic spelling
     func getStringNotes(tuning: GuitarTuning = .standard) -> [String?] {
         // NEW: Determine spelling preference based on chord key and type
@@ -1065,6 +1095,8 @@ enum NoteRole {
 }
 
 extension ChordPosition {
+    
+    
     
     /// Analyze note roles based on chord key
     func analyzeNoteRoles(tuning: GuitarTuning = .standard) -> [NoteRole?] {
