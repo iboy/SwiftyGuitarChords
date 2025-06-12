@@ -165,7 +165,9 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
             origin: origin,
             showFingers: showFingers,
             forScreen: forScreen,
-            displayMode: displayMode
+            displayMode: displayMode,
+            tuning: effectiveTuning
+            
         )
         let dots = dotsLayer(
             stringConfig: stringConfig,
@@ -380,7 +382,8 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
         origin: CGPoint,
         showFingers: Bool,
         forScreen: Bool,
-        displayMode: ChordDisplayMode = .fingers
+        displayMode: ChordDisplayMode = .fingers,
+        tuning: GuitarTuning = .standard
     ) -> CAShapeLayer {
         let layer = CAShapeLayer()
 
@@ -408,8 +411,27 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
             let barrePath = CGMutablePath()
 
             // draw barre behind all frets that are above the barre chord
-            var startIndex = (frets.firstIndex { $0 == barre } ?? 0)
-            let barreFretCount = frets.filter { $0 == barre }.count
+            //ORIG var startIndex = (frets.firstIndex { $0 == barre } ?? 0)
+            //ORIG let barreFretCount = frets.filter { $0 == barre }.count
+            
+            /* FIRST FIX
+            let barreFinger = fingers[frets.firstIndex { $0 == barre } ?? 0]
+            var startIndex = (fingers.firstIndex { $0 == barreFinger } ?? 0)
+            let barreFretCount = fingers.filter { $0 == barreFinger }.count
+             */
+
+            // Find which finger is used most on this barre fret
+            let fingersOnBarreFret = frets.enumerated().compactMap { index, fret in
+                fret == barre ? fingers[index] : nil
+            }
+            let barreFinger = fingersOnBarreFret.max { a, b in
+                fingersOnBarreFret.filter { $0 == a }.count < fingersOnBarreFret.filter { $0 == b }.count
+            } ?? 0
+
+            var startIndex = (fingers.firstIndex { $0 == barreFinger } ?? 0)
+            let barreFretCount = fingers.filter { $0 == barreFinger }.count
+            
+            
             var length = 0
 
             for index in startIndex..<frets.count {
@@ -441,17 +463,19 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
 
             layer.addSublayer(barreLayer)
 
-            if showFingers && displayMode != .notesNoOctave && displayMode != .functions && displayMode != .blank {
+            if showFingers && displayMode != .notesNoOctave && displayMode != .blank && displayMode != .functions {
+                
                 let fingerLayer = CAShapeLayer()
                 let txtFont = SWIFTFont.systemFont(ofSize: stringConfig.margin, weight: .medium)
                 let txtRect = CGRect(x: 0, y: 0, width: stringConfig.spacing, height: fretConfig.spacing)
                 let transX = startingX + ((endingX - startingX) / 2)
                 let transY = y
 
-                if let fretIndex = frets.firstIndex(of: barre) {
-                    let txtPath = "\(fingers[fretIndex])".path(font: txtFont, rect: txtRect, position: CGPoint(x: transX, y: transY))
-                    fingerLayer.path = txtPath
-                }
+                // Choose display text based on mode
+                let displayText = fingerToDisplayText(barreFinger)
+
+                let txtPath = displayText.path(font: txtFont, rect: txtRect, position: CGPoint(x: transX, y: transY))
+                fingerLayer.path = txtPath
                 fingerLayer.fillColor = backgroundColor
                 layer.addSublayer(fingerLayer)
             }
@@ -547,30 +571,27 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
 
                 continue
             }
-
+            print("🔍 Processing string \(index): fret=\(fret), finger=\(fingers[index])")
             if barres.contains(fret) {
-                // 🆕 NEW: In notes mode, draw individual dots instead of barre
-                if displayMode == .notesNoOctave || displayMode == .functions {
-                    print("🎯 Drawing individual note dot instead of barre for string \(index + 1)")
-                    // DON'T continue - let it fall through to draw individual dot below
+                // In functions mode, always draw individual dots
+                if displayMode == .functions || displayMode == .notesNoOctave {
+                    // Don't skip - let all individual dots show their functions
                 } else {
-                    // Original barre logic - skip drawing individual dots
-                    if index + 1 < frets.count {
-                        let next = index + 1
-                        if frets[next] >= fret {
-                            continue  // Skip drawing individual dot
-                        }
+                    // In other modes, skip if it's the barre finger
+                    // Calculate which finger is the barre finger (same logic as barre drawing)
+                    let fingersOnBarreFret = frets.enumerated().compactMap { index, checkFret in
+                        checkFret == fret ? fingers[index] : nil
                     }
-
-                    if index - 1 > 0 {
-                        let prev = index - 1
-                        if frets[prev] >= fret {
-                            continue  // Skip drawing individual dot
-                        }
+                    let barreFinger = fingersOnBarreFret.max { a, b in
+                        fingersOnBarreFret.filter { $0 == a }.count < fingersOnBarreFret.filter { $0 == b }.count
+                    } ?? 0
+                    
+                    if fingers[index] == barreFinger {
+                        continue  // Skip drawing individual dot for barre finger
                     }
                 }
             }
-
+        
             let dotY = CGFloat(fret) * fretConfig.spacing + fretConfig.margin - (fretConfig.spacing / 2) + origin.y
             let dotX = (CGFloat(index) * stringConfig.spacing + stringConfig.margin + origin.x).shouldMirror(mirror, offset: rect.width)
 
@@ -598,8 +619,10 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
             // Use display text based on mode
             if showFingers  {
                 // Get the display text for this string
+                
                 let displayTexts = getDisplayText(mode: displayMode, tuning: tuning)
-                let displayText = displayTexts[index] ?? "\(fingers[index])"
+                let displayText = displayTexts[index] ?? fingerToDisplayText(fingers[index])
+                print("🐛 String \(index): finger=\(fingers[index]), displayText='\(displayText)', mode=\(displayMode)")
                 
                 // 🆕 DYNAMIC FONT SIZING based on text length and content
                 let baseFontSize = stringConfig.margin
@@ -756,6 +779,8 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
         
         // MARK: - Helper Functions
         
+    
+    
         private func isMinorChord(_ suffix: Chords.Suffix) -> Bool {
             return suffix.group == .minor
         }
@@ -830,6 +855,38 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
             }
         }
         
+}
+
+// MARK: - Support Thumb notatation as finger number 5
+extension ChordPosition {
+    /// Convert finger number to display text
+    private func fingerToDisplayText(_ fingerNumber: Int) -> String {
+        print("🔧 fingerToDisplayText called with: \(fingerNumber)")
+        
+        switch fingerNumber {
+        case 5:
+            print("🔧 Returning 'T' for thumb")
+            return "T"      // Thumb
+        case 0:
+            print("🔧 Returning '' for open string")
+            return ""       // Open string
+        case 1...4:
+            print("🔧 Returning '\(fingerNumber)' for finger")
+            return "\(fingerNumber)"  // Fingers 1-4
+        default:
+            print("🔧 Returning '\(fingerNumber)' as fallback")
+            return "\(fingerNumber)"  // Fallback
+        }
+    }
+    
+    var isValidFingerPattern: Bool {
+            return fingers.allSatisfy { finger in
+                finger == -1 ||      // Muted
+                finger == 5 ||       // Thumb
+                (1...4).contains(finger) ||  // Normal fingers
+                finger == 0         // Open (if you use this)
+            }
+        }
 }
 
 
@@ -1043,7 +1100,7 @@ public extension ChordPosition {
             
             switch mode {
             case .fingers:
-                return "\(fingers[stringIndex])"
+                return fingerToDisplayText(fingers[stringIndex])
             case .notesNoOctave:
                 return noteNames[stringIndex]
             case .functions:
@@ -1118,7 +1175,7 @@ extension ChordPosition {
             return .other
         }
     }
-    
+    /*
     /// Get display text for each string based on mode
     func getDisplayText(mode: ChordDisplayMode, tuning: GuitarTuning = .standard) -> [String?] {
         let noteNames = mode == .notesNoOctave ?
@@ -1148,8 +1205,9 @@ extension ChordPosition {
             //    }
             }
         }
-    }
+    } */
 }
+     
 
 extension CGFloat {
     func shouldMirror(_ mirror: Bool, offset: CGFloat) -> CGFloat {
