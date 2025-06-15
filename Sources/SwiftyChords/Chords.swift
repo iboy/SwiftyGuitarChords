@@ -1,6 +1,8 @@
 import Foundation
 import CoreGraphics
 
+private let DEBUG_GENERAL = false
+
 public struct Chords {
     
     public enum Group {
@@ -382,9 +384,10 @@ public struct Chords {
                     // Try with Resources subfolder
                     resourceUrl = bundle.url(forResource: "Resources/\(name)", withExtension: "json")
                     if resourceUrl != nil {
-                        #if DEBUG
-                        print("Found \(name).json in Resources folder of bundle: \(bundle.bundlePath)")
-                        #endif
+                        if DEBUG_GENERAL {
+                            print("Found \(name).json in Resources folder of bundle: \(bundle.bundlePath)")
+                        }
+                        
                         break
                     }
                 }
@@ -406,28 +409,28 @@ public struct Chords {
             }
             
             guard let fileUrl = resourceUrl else {
-                #if DEBUG
-                print("Could not find \(name).json in any bundle location")
-                print("Searched bundles:")
-                for bundle in Bundle.allBundles {
-                    print("  - \(bundle.bundlePath)")
+                if DEBUG_GENERAL {
+                    print("Could not find \(name).json in any bundle location")
+                    print("Searched bundles:")
+                    for bundle in Bundle.allBundles {
+                        print("  - \(bundle.bundlePath)")
+                    }
                 }
-                #endif
                 return []
             }
             
-            #if DEBUG
-            print("Successfully found \(name).json at: \(fileUrl)")
-            #endif
+            if DEBUG_GENERAL {
+                print("Successfully found \(name).json at: \(fileUrl)")
+            }
             
             let data = try Data(contentsOf: fileUrl)
             let allChords = try JSONDecoder().decode([ChordPosition].self, from: data)
             return allChords
             
         } catch {
-            #if DEBUG
-            print("There is no chord data for \(name):", error)
-            #endif
+            if DEBUG_GENERAL {
+                print("There is no chord data for \(name):", error)
+            }
         }
         return []
     }

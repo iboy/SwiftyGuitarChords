@@ -7,6 +7,7 @@ import AppKit
 import UIKit
 #endif
 
+private let DEBUG_GENERAL = false
 
 // MARK: - ChordPosition
 public struct ChordPosition: Codable, Identifiable, Equatable {
@@ -210,9 +211,9 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
         showNut: Bool = true
     ) -> CAShapeLayer {
         let layer = CAShapeLayer()
-        // 🆕 ADD THIS DEBUG:
+        if DEBUG_GENERAL {
             print("🎨 stringsAndFretsLayer: forScreen=\(forScreen)")
-        
+        }
         let resolvedPrimaryColor: CGColor
         if forScreen {
             // Save current appearance
@@ -232,18 +233,18 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
             resolvedPrimaryColor = SWIFTColor.black.cgColor
         }
 
-        // 🆕 ADD THIS DEBUG:
-           print("🎨 Raw primaryColor: \(resolvedPrimaryColor)")
-           print("🎨 Current appearance: \(NSApp.effectiveAppearance.name)")
-           print("🎨 Label color right now: \(NSColor.labelColor)")
+        if DEBUG_GENERAL {
+            print("🎨 Raw primaryColor: \(resolvedPrimaryColor)")
+            print("🎨 Current appearance: \(NSApp.effectiveAppearance.name)")
+            print("🎨 Label color right now: \(NSColor.labelColor)")
+            
+            print("🎨 stringsAndFretsLayer: forScreen=\(forScreen)")
+            print("🎨 NSColor.labelColor: \(NSColor.labelColor)")
+            print("🎨 Converted to CGColor: \(NSColor.labelColor.cgColor)")  // 🆕 This is the key!
+            print("🎨 Actually using: \(resolvedPrimaryColor)")
+            print("🎨 Current appearance: \(NSApp.effectiveAppearance.name)")
+        }
         
-        print("🎨 stringsAndFretsLayer: forScreen=\(forScreen)")
-        print("🎨 NSColor.labelColor: \(NSColor.labelColor)")
-        print("🎨 Converted to CGColor: \(NSColor.labelColor.cgColor)")  // 🆕 This is the key!
-        print("🎨 Actually using: \(resolvedPrimaryColor)")
-        print("🎨 Current appearance: \(NSApp.effectiveAppearance.name)")
-        
-           
         // Strings
         let stringPath = CGMutablePath()
 
@@ -327,10 +328,6 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
 
     private func nameLayer(fretConfig: LineConfig, origin: CGPoint, center: CGFloat, forScreen: Bool, name: Chords.Name) -> CAShapeLayer {
 
-        //let primaryColor = forScreen ? NSColor.labelColor.cgColor : SWIFTColor.black.cgColor
-        //let primaryColor = forScreen ? primaryColor.cgColor : SWIFTColor.black.cgColor
-
-        // REPLACE WITH:
         let primaryColor: CGColor
         if forScreen {
             let previousAppearance = NSAppearance.current
@@ -409,16 +406,6 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
 
         for barre in barres {
             let barrePath = CGMutablePath()
-
-            // draw barre behind all frets that are above the barre chord
-            //ORIG var startIndex = (frets.firstIndex { $0 == barre } ?? 0)
-            //ORIG let barreFretCount = frets.filter { $0 == barre }.count
-            
-            /* FIRST FIX
-            let barreFinger = fingers[frets.firstIndex { $0 == barre } ?? 0]
-            var startIndex = (fingers.firstIndex { $0 == barreFinger } ?? 0)
-            let barreFretCount = fingers.filter { $0 == barreFinger }.count
-             */
 
             // Find which finger is used most on this barre fret
             let fingersOnBarreFret = frets.enumerated().compactMap { index, fret in
@@ -571,7 +558,9 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
 
                 continue
             }
-            print("🔍 Processing string \(index): fret=\(fret), finger=\(fingers[index])")
+            if DEBUG_GENERAL {
+                print("🔍 Processing string \(index): fret=\(fret), finger=\(fingers[index])")
+            }
             if barres.contains(fret) {
                 // In functions mode, always draw individual dots
                 if displayMode == .functions || displayMode == .notesNoOctave {
@@ -622,8 +611,9 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
                 
                 let displayTexts = getDisplayText(mode: displayMode, tuning: tuning)
                 let displayText = displayTexts[index] ?? fingerToDisplayText(fingers[index])
-                print("🐛 String \(index): finger=\(fingers[index]), displayText='\(displayText)', mode=\(displayMode)")
-                
+                if DEBUG_GENERAL {
+                    //print("🐛 String \(index): finger=\(fingers[index]), displayText='\(displayText)', mode=\(displayMode)")
+                }
                 // 🆕 DYNAMIC FONT SIZING based on text length and content
                 let baseFontSize = stringConfig.margin
                 let fontSize: CGFloat
@@ -653,9 +643,9 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
                     width: stringConfig.spacing,
                     height: fretConfig.spacing
                 )
-
-                print("🎵 Display mode: \(displayMode), Text: '\(displayText)', Font size: \(fontSize)")
-
+                if DEBUG_GENERAL {
+                    print("🎵 Display mode: \(displayMode), Text: '\(displayText)', Font size: \(fontSize)")
+                }
                 let txtPath = displayText.path(
                     font: txtFont,
                     rect: txtRect,
@@ -861,20 +851,29 @@ public struct ChordPosition: Codable, Identifiable, Equatable {
 extension ChordPosition {
     /// Convert finger number to display text
     private func fingerToDisplayText(_ fingerNumber: Int) -> String {
-        print("🔧 fingerToDisplayText called with: \(fingerNumber)")
-        
+        if DEBUG_GENERAL {
+            print("🔧 fingerToDisplayText called with: \(fingerNumber)")
+        }
         switch fingerNumber {
         case 5:
-            print("🔧 Returning 'T' for thumb")
+            if DEBUG_GENERAL {
+                print("🔧 Returning 'T' for thumb")
+            }
             return "T"      // Thumb
         case 0:
-            print("🔧 Returning '' for open string")
+            if DEBUG_GENERAL {
+                print("🔧 Returning '' for open string")
+            }
             return ""       // Open string
         case 1...4:
-            print("🔧 Returning '\(fingerNumber)' for finger")
+            if DEBUG_GENERAL {
+                print("🔧 Returning '\(fingerNumber)' for finger")
+            }
             return "\(fingerNumber)"  // Fingers 1-4
         default:
-            print("🔧 Returning '\(fingerNumber)' as fallback")
+            if DEBUG_GENERAL {
+                print("🔧 Returning '\(fingerNumber)' as fallback")
+            }
             return "\(fingerNumber)"  // Fallback
         }
     }
@@ -892,7 +891,7 @@ extension ChordPosition {
 
 // MARK: - Guitar Tuning System
 
-public struct GuitarTuning {
+public struct GuitarTuning: Sendable {
     public let name: String
     public let noteNames: [String]  // ["E", "A", "D", "G", "B", "E"]
     
@@ -1058,8 +1057,13 @@ public extension ChordPosition {
             
         // Special case: C can be either
         case .c:
-            // C major = neutral, C minor = flat family (relative to Eb major)
-            return suffix.group == .minor || suffix.group == .diminished
+            // C major = neutral, but C7 and other dominant chords lean toward flats
+                return suffix.group == .minor ||
+                       suffix.group == .diminished ||
+                       suffix == .seven ||           // C7 → B♭
+                       suffix == .sevenFlatFive ||   // C7♭5 → B♭
+                       suffix == .sevenFlatNine ||   // C7♭9 → B♭
+                       suffix == .sevenSharpNine     // C7♯9 → B♭
             
         default:
             // Default to sharps for any other cases
